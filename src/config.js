@@ -90,6 +90,7 @@ const relayHosts = [
   'relay.nostr.vet',
   'nostr.v6.army',
   'relay-jp.nostr.wirednet.jp',
+  'haven.vanderwarker.family',
 ];
 
 const config = {
