@@ -69,6 +69,27 @@ const relayHosts = [
   'relay.exit.pub',
   'nostr.lbdev.fun',
   'nostr.relayer.se',
+  'nostr.lnbitcoin.cz',
+  'umami.nostr1.com',
+  'social.camph.net',
+  'nostr2.actn.io',
+  'nostr.actn.io',
+  'nostr.portemonero.com',
+  'ca.orangepill.dev',
+  'nostrex.fly.dev',
+  'rsslay.fiatjaf.com',
+  'kiwibuilders.nostr21.net',
+  'news.nos.social',
+  'nostr3.actn.io',
+  'relay-jp.nostr.wirednet.jp',
+  'relay.nostrati.com',
+  'relay.siamstr.com',
+  'beta.nostril.cam',
+  'relay.farscapian.com',
+  'thewildhustle.nostr1.com',
+  'relay.nostr.vet',
+  'nostr.v6.army',
+  'relay-jp.nostr.wirednet.jp',
 ];
 
 const config = {
@@ -95,14 +116,14 @@ const config = {
   azure: {
     // Enable Azure-specific optimizations
     isAzureWebApp: !!process.env.WEBSITES_ENABLE_APP_SERVICE_STORAGE,
-    
+
     // Health check configuration
     healthCheck: {
       enabled: true,
       path: '/health',
       timeout: 10000, // 10 seconds
     },
-    
+
     // Logging configuration for Azure
     logging: {
       level: process.env.LOG_LEVEL || 'info',
