@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  AZURE_WEBAPP_NAME: nostria-relay-monitor-app
+  AZURE_WEBAPP_NAME: nostria-relay-monitor
   AZURE_RESOURCE_GROUP: nostria-global
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
