@@ -114,6 +114,9 @@ const relayHosts = [
   'kmc-nostr.amiunderwater.com',
   'nostr.drss.io',
   'galaxy13.nostr1.com',
+  'jp-relay-nostr.invr.chat',
+  'relay.moinsen.com',
+  'nostr-relay.philipcristiano.com',
 ];
 
 const config = {
