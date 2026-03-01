@@ -91,6 +91,7 @@ const relayHosts = [
   'nostr.v6.army',
   'relay-jp.nostr.wirednet.jp',
   'haven.vanderwarker.family',
+  'jellyfish.land',
 ];
 
 const config = {
