@@ -1,0 +1,35 @@
+FROM node:18-alpine
+
+# Install curl for health checks
+RUN apk add --no-cache curl
+
+# Create app directory
+WORKDIR /app
+
+# Create non-root user for security
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nostria -u 1001
+
+# Install app dependencies
+COPY package*.json ./
+
+# Install dependencies (excluding PM2 for Azure Web Apps compatibility)
+RUN npm ci --only=production && npm cache clean --force
+
+# Bundle app source
+COPY . .
+
+# Create directories with proper permissions
+RUN mkdir -p data logs && \
+    chmod -R 755 data logs && \
+    chown -R nostria:nodejs /app
+
+# Switch to non-root user
+USER nostria
+
+# Expose port
+EXPOSE 3000
+
+# Azure Web Apps will handle process management
+# so we don't need PM2 here
+CMD ["node", "index.js"]

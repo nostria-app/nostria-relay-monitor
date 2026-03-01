@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>
+        <%= title %> | Nostria Relay Monitor
+    </title>
+
+    <link rel="icon" href="/favicon.ico" sizes="any">
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+    <!-- Custom CSS -->
+    <style>
+        :root {
+            --status-online: #10b981;
+            --status-offline: #ef4444;
+            --status-error: #f59e0b;
+            --primary-dark: #1f2937;
+            --secondary-dark: #374151;
+        }
+
+        body {
+            background-color: #f9fafb;
+            color: #1f2937;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+
+        .navbar-brand {
+            font-weight: bold;
+            font-size: 1.5rem;
+        }
+
+        .status-card {
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .status-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .status-badge {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 6px;
+        }
+
+        .status-online {
+            background-color: var(--status-online);
+        }
+
+        .status-offline {
+            background-color: var(--status-offline);
+        }
+
+        .status-error {
+            background-color: var(--status-error);
+        }
+
+        .status-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 1rem;
+        }
+
+        .uptime-bar {
+            height: 6px;
+            border-radius: 3px;
+            background-color: #e5e7eb;
+            margin-top: 0.5rem;
+            overflow: hidden;
+        }
+
+        .uptime-value {
+            height: 100%;
+            background-color: var(--status-online);
+            border-radius: 3px;
+        }
+
+        .history-timeline {
+            display: flex;
+            gap: 2px;
+            margin: 1rem 0;
+        }
+
+        .history-item {
+            width: 8px;
+            height: 24px;
+            border-radius: 2px;
+        }
+
+        .page-header {
+            padding: 2rem 0;
+            background-color: #fff;
+            border-bottom: 1px solid #e5e7eb;
+            margin-bottom: 2rem;
+        }
+
+        .footer {
+            padding: 2rem 0;
+            border-top: 1px solid #e5e7eb;
+            margin-top: 3rem;
+            background-color: #fff;
+        }
+
+        /* Dark mode media query */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background-color: #111827;
+                color: #f9fafb;
+            }
+
+            .card,
+            .page-header,
+            .footer {
+                background-color: #1f2937;
+                border-color: #374151;
+            }
+
+            .text-muted {
+                color: #9ca3af !important;
+            }
+
+            .uptime-bar {
+                background-color: #374151;
+            }
+
+            /* Fix for table styling in dark mode */
+            .table {
+                color: #f9fafb;
+            }
+
+            .table-hover tbody tr:hover {
+                background-color: rgba(255, 255, 255, 0.814) !important;
+            }
+
+            .table-light {
+                color: #1f2937;
+                background-color: #9ca3af;
+            }
+
+            .history-table-row {
+                border-color: #374151;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-signal me-2"></i>
+                Nostria Relay Monitor
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+                aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/api/status">API</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="https://www.nostria.app/">Nostria Website</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main>
+        <%- body %>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer text-center">
+        <div class="container">
+            <p class="text-muted mb-0">
+                <a href="https://www.nostria.app">www.nostria.app</a>
+                <span class="mx-2">|</span>
+                <a href="https://github.com/nostria-app/nostria-relay-monitor" target="_blank" rel="noopener noreferrer">
+                    <i class="fab fa-github"></i> GitHub
+                </a>
+            </p>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Include any additional scripts -->
+    <%- typeof scripts !=='undefined' ? scripts : '' %>
+</body>
+
+</html>

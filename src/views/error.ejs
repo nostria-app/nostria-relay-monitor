@@ -1,0 +1,52 @@
+<!-- Error Page -->
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-body p-5 text-center">
+                    <% if (statusCode === 404) { %>
+                        <i class="fas fa-search text-warning fa-4x mb-4"></i>
+                        <h1 class="mb-4">Page Not Found</h1>
+                        <p class="text-muted">The page you're looking for doesn't exist.</p>
+                    <% } else if (statusCode === 408) { %>
+                        <i class="fas fa-clock text-warning fa-4x mb-4"></i>
+                        <h1 class="mb-4">Request Timeout</h1>
+                        <p class="text-muted">The request took too long to process.</p>
+                    <% } else if (statusCode === 500) { %>
+                        <i class="fas fa-exclamation-triangle text-danger fa-4x mb-4"></i>
+                        <h1 class="mb-4">Server Error</h1>
+                        <p class="text-muted">Something went wrong on our end. Please try again later.</p>
+                    <% } else { %>
+                        <i class="fas fa-exclamation-triangle text-warning fa-4x mb-4"></i>
+                        <h1 class="mb-4"><%= message || 'An error occurred' %></h1>
+                    <% } %>
+                    
+                    <% if (statusCode) { %>
+                        <h2 class="text-muted mb-4">Error <%= statusCode %></h2>
+                    <% } %>
+                    
+                    <% if (error && error.stack && process.env.NODE_ENV === 'development') { %>
+                        <div class="alert alert-danger mt-4">
+                            <h5>Development Error Details:</h5>
+                            <pre class="mb-0 text-start small"><%= error.stack %></pre>
+                        </div>
+                    <% } %>
+                    
+                    <div class="mt-4">
+                        <a href="/" class="btn btn-primary me-2">
+                            <i class="fas fa-home me-2"></i> Return to Dashboard
+                        </a>
+                        <button onclick="window.history.back()" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left me-2"></i> Go Back
+                        </button>
+                    </div>
+                    
+                    <div class="mt-4 text-muted small">
+                        <p>If this problem persists, please contact support.</p>
+                        <p>Error ID: <%= new Date().toISOString() %></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

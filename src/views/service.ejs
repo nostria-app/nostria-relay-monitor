@@ -1,0 +1,204 @@
+<!-- Service Detail View -->
+<div class="page-header">
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <a href="/" class="text-decoration-none text-muted mb-2 d-inline-block">
+                    <i class="fas fa-arrow-left me-1"></i> Back to Dashboard
+                </a>
+                <h1 class="mb-1"><%= service.name %></h1>
+                <p class="text-muted mb-0">
+                    <a href="<%= service.httpsUrl %>" target="_blank" rel="noopener noreferrer" class="text-muted">
+                        <%= service.httpsUrl %> <i class="fas fa-external-link-alt fa-xs"></i>
+                    </a>
+                </p>
+            </div>
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="timeframeDropdown" 
+                        data-bs-toggle="dropdown" aria-expanded="false">
+                    <%= days %> Days
+                </button>
+                <ul class="dropdown-menu" aria-labelledby="timeframeDropdown">
+                    <li><a class="dropdown-item" href="/service/<%= service.name %>?days=1">1 Day</a></li>
+                    <li><a class="dropdown-item" href="/service/<%= service.name %>?days=3">3 Days</a></li>
+                    <li><a class="dropdown-item" href="/service/<%= service.name %>?days=7">7 Days</a></li>
+                    <li><a class="dropdown-item" href="/service/<%= service.name %>?days=14">14 Days</a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    <!-- Current Status -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Current Status</h5>
+                    <% 
+                        let statusClass = 'text-warning';
+                        let statusIcon = 'question-circle';
+                        let statusText = 'Unknown';
+                        let responseTime = 'N/A';
+                        let timestamp = 'N/A';
+                        let httpsText = 'Unknown';
+                        let wssText = 'Unknown';
+                        
+                        if (history && history.length > 0) {
+                            const latest = history[0];
+                            
+                            if (latest.status === 'online') {
+                                statusClass = 'text-success';
+                                statusIcon = 'check-circle';
+                                statusText = 'HTTPS + WSS Online';
+                            } else if (latest.status === 'partial') {
+                                statusClass = 'text-warning';
+                                statusIcon = 'exclamation-triangle';
+                                statusText = 'Partially Online';
+                            } else if (latest.status === 'offline') {
+                                statusClass = 'text-danger';
+                                statusIcon = 'times-circle';
+                                statusText = 'Fully Offline';
+                            } else {
+                                statusClass = 'text-warning';
+                                statusIcon = 'exclamation-circle';
+                                statusText = 'Error';
+                            }
+                            
+                            responseTime = `${latest.responseTime} ms`;
+                            timestamp = new Date(latest.timestamp).toLocaleString();
+                            httpsText = latest.httpsStatus === 'online' ? `UP (${latest.httpsStatusCode || '-'})` : `DOWN (${latest.httpsMessage || 'no response'})`;
+                            wssText = latest.wssStatus === 'online' ? 'UP (101)' : `DOWN (${latest.wssMessage || 'no response'})`;
+                        }
+                    %>
+                    <div class="d-flex align-items-center my-4">
+                        <i class="fas fa-<%= statusIcon %> fa-3x <%= statusClass %> me-3"></i>
+                        <div>
+                            <h3 class="mb-0"><%= statusText %></h3>
+                            <p class="text-muted mb-0">Last checked: <%= timestamp %></p>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-4">
+                        <div class="col-6">
+                            <div class="border-start ps-3">
+                                <p class="text-muted mb-1">Response Time</p>
+                                <h5><%= responseTime %></h5>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="border-start ps-3">
+                                <p class="text-muted mb-1">Uptime</p>
+                                <h5><%= uptime.toFixed(2) %>%</h5>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <p class="mb-1"><strong>HTTPS:</strong> <span class="text-muted"><%= httpsText %></span></p>
+                            <p class="mb-1"><strong>WSS:</strong> <span class="text-muted"><%= wssText %></span></p>
+                            <% if (deadInfo && deadInfo.deadForHuman) { %>
+                                <p class="mb-0 text-danger"><strong>Dead for:</strong> <%= deadInfo.deadForHuman %></p>
+                            <% } %>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-8">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Uptime Last <%= days %> Days</h5>
+                    <div class="history-timeline my-4">
+                        <% if (history && history.length > 0) { %>
+                            <% 
+                                // Show at most 100 history items to avoid performance issues
+                                const displayHistory = history.slice(0, 100).reverse();
+                                displayHistory.forEach(function(item) { 
+                                    let itemClass = 'status-error';
+                                    
+                                    if (item.isAlive || item.status === 'online' || item.status === 'partial') {
+                                        itemClass = 'status-online';
+                                    } else if (item.status === 'offline') {
+                                        itemClass = 'status-offline';
+                                    }
+                            %>
+                                <div class="history-item <%= itemClass %>" title="<%= new Date(item.timestamp).toLocaleString() %>: <%= item.status %>"></div>
+                            <% }); %>
+                        <% } else { %>
+                            <p class="text-muted">No history available</p>
+                        <% } %>
+                    </div>
+                    <p class="text-muted"><small>Each bar represents a check. Hover for details.</small></p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- History Table -->
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Monitoring History</h5>
+            <span class="badge bg-secondary"><%= history ? history.length : 0 %> Checks</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Time</th>
+                            <th>Status</th>
+                            <th>HTTPS</th>
+                            <th>WSS</th>
+                            <th>Response Time</th>
+                            <th>Message</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% if (history && history.length > 0) { %>
+                            <% history.forEach(function(item) { %>
+                                <tr class="history-table-row">
+                                    <td><%= new Date(item.timestamp).toLocaleString() %></td>
+                                    <td>
+                                        <% if (item.status === 'online') { %>
+                                            <span class="badge bg-success">Online</span>
+                                        <% } else if (item.status === 'partial') { %>
+                                            <span class="badge bg-warning text-dark">Partial</span>
+                                        <% } else if (item.status === 'offline') { %>
+                                            <span class="badge bg-danger">Offline</span>
+                                        <% } else { %>
+                                            <span class="badge bg-warning text-dark">Error</span>
+                                        <% } %>
+                                    </td>
+                                    <td>
+                                        <% if (item.httpsStatus === 'online') { %>
+                                            <span class="badge bg-success">UP</span>
+                                        <% } else { %>
+                                            <span class="badge bg-danger">DOWN</span>
+                                        <% } %>
+                                    </td>
+                                    <td>
+                                        <% if (item.wssStatus === 'online') { %>
+                                            <span class="badge bg-success">UP</span>
+                                        <% } else { %>
+                                            <span class="badge bg-danger">DOWN</span>
+                                        <% } %>
+                                    </td>
+                                    <td><%= item.responseTime %> ms</td>
+                                    <td><%= item.message %></td>
+                                </tr>
+                            <% }); %>
+                        <% } else { %>
+                            <tr>
+                                <td colspan="6" class="text-center py-4">No history available</td>
+                            </tr>
+                        <% } %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
