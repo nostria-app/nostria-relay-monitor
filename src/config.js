@@ -141,7 +141,6 @@ const relayHosts = [
   'njump.me',
   'nostr-01.bolt.observer',
   'nosdrive.app',
-  'feeds.nostr.band',
   'nostr.100p.org',
   'nostr.bch.ninja',
   'nostr.blockpower.capital',
@@ -189,6 +188,8 @@ const relayHosts = [
   'relay.uid.ovh',
   'relay.zhoushen929.com',
   'relay.hasenpfeffr.com',
+  'nostr.oxtr.dev',
+  'rago-nostr.duckdns.org',
 ];
 
 const config = {
