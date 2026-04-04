@@ -22,12 +22,62 @@ const db = new JsonlDB(path.join(dbDir, 'status.jsonl'));
 const dbFilePath = path.join(dbDir, 'status.jsonl');
 const lockFilePath = `${dbFilePath}.lock`;
 
+const isLockError = (error) =>
+    typeof error?.message === 'string' && error.message.includes('Failed to lock DB file');
+
+const isInvalidDataError = (error) =>
+    typeof error?.message === 'string' && error.message.includes('Cannot open file: Invalid data in line');
+
+const extractInvalidLineNo = (error) => {
+    const match = error?.message?.match(/Invalid data in line\s+(\d+)/i);
+    return match ? Number(match[1]) : null;
+};
+
+const sanitizeJsonlFile = () => {
+    if (!fs.existsSync(dbFilePath)) {
+        return;
+    }
+
+    const backupSuffix = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupPath = `${dbFilePath}.corrupt-${backupSuffix}.bak`;
+    fs.copyFileSync(dbFilePath, backupPath);
+
+    const content = fs.readFileSync(dbFilePath, 'utf8');
+    const lines = content.split(/\r?\n/);
+    const validLines = [];
+    let skippedLines = 0;
+
+    for (const line of lines) {
+        if (!line.trim()) {
+            continue;
+        }
+
+        try {
+            JSON.parse(line);
+            validLines.push(line);
+        } catch {
+            skippedLines++;
+        }
+    }
+
+    const rebuilt = validLines.length > 0 ? `${validLines.join('\n')}\n` : '';
+    fs.writeFileSync(dbFilePath, rebuilt, 'utf8');
+
+    console.warn(`Sanitized corrupted database file. Removed ${skippedLines} invalid line(s). Backup: ${backupPath}`);
+};
+
 const openDatabaseWithRecovery = async () => {
     try {
         await db.open();
         return;
     } catch (error) {
-        const isLockError = typeof error?.message === 'string' && error.message.includes('Failed to lock DB file');
+        if (isInvalidDataError(error)) {
+            const invalidLineNo = extractInvalidLineNo(error);
+            console.warn(`Detected invalid JSONL data${invalidLineNo ? ` at line ${invalidLineNo}` : ''}. Attempting file repair...`);
+            sanitizeJsonlFile();
+            await db.open();
+            return;
+        }
 
         if (!isLockError) {
             throw error;
@@ -44,7 +94,7 @@ const openDatabaseWithRecovery = async () => {
                 await db.open();
                 return;
             } catch (retryError) {
-                const retryLockError = typeof retryError?.message === 'string' && retryError.message.includes('Failed to lock DB file');
+                const retryLockError = isLockError(retryError);
                 if (!retryLockError) {
                     throw retryError;
                 }
