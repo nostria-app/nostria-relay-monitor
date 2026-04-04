@@ -8,10 +8,9 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const relayHosts = [
-  'ribo.eu.nostria.app',
-  'ribo.us.nostria.app',
-  'discovery.eu.nostria.app',
-  'discovery.us.nostria.app',
+  'ribo.nostria.app',
+  'rilo.nostria.app',
+  'indexer.openresist.com',
   'relay.damus.io',
   'relay.primal.net',
   'nos.lol',
