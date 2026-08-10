@@ -1,26 +1,41 @@
 import { JsonlDB } from "@alcalzone/jsonl-db";
 import path from 'path';
-import { fileURLToPath } from 'url';
 import fs from 'fs';
+import os from 'os';
 import config from '../config.js';
 
-// Get __dirname equivalent in ESM
-// const __filename = fileURLToPath(import.meta.url);
-// const __dirname = path.dirname(__filename);
+// Candidate directories in priority order; mounted storage (e.g. Azure /home) can be
+// unwritable for the container user, so fall back instead of crashing at startup.
+const dbDirCandidates = [
+    config.dbPath || './data',
+    './data',
+    path.join(os.tmpdir(), 'nostria-relay-monitor')
+];
 
-// Get database directory from config or use default
-const dbDir = config.dbPath || './data';
+const resolveDbDir = () => {
+    for (const candidate of dbDirCandidates) {
+        try {
+            fs.mkdirSync(candidate, { recursive: true });
+            fs.accessSync(candidate, fs.constants.W_OK);
+            return candidate;
+        } catch (error) {
+            console.warn(`Database directory not usable (${candidate}): ${error.message}`);
+        }
+    }
 
-// Ensure DB directory exists
-if (!fs.existsSync(dbDir)) {
-    fs.mkdirSync(dbDir, { recursive: true });
+    throw new Error('No writable database directory available');
+};
+
+const dbDir = resolveDbDir();
+if (dbDir !== dbDirCandidates[0]) {
+    console.warn(`Using fallback database directory: ${dbDir}`);
 }
-
-// Create database instance
-const db = new JsonlDB(path.join(dbDir, 'status.jsonl'));
 
 const dbFilePath = path.join(dbDir, 'status.jsonl');
 const lockFilePath = `${dbFilePath}.lock`;
+
+// Create database instance
+const db = new JsonlDB(dbFilePath);
 
 const isLockError = (error) =>
     typeof error?.message === 'string' && error.message.includes('Failed to lock DB file');
@@ -79,7 +94,7 @@ const openDatabaseWithRecovery = async () => {
             return;
         }
 
-        if (!isLockError) {
+        if (!isLockError(error)) {
             throw error;
         }
 
@@ -111,7 +126,14 @@ const openDatabaseWithRecovery = async () => {
     }
 };
 
-await openDatabaseWithRecovery();
+let dbReady = false;
+try {
+    await openDatabaseWithRecovery();
+    dbReady = true;
+} catch (error) {
+    // Keep the process alive so the web server can still start and report health.
+    console.error(`Failed to open status database (${dbFilePath}):`, error);
+}
 
 /**
  * Status Database Service
@@ -121,7 +143,18 @@ class StatusDb {
         this.db = db;
         
         // Auto-purge old records every day
-        setInterval(() => this.purgeOldRecords(), 24 * 60 * 60 * 1000);
+        setInterval(() => {
+            this.purgeOldRecords().catch(error => console.error('Scheduled purge failed:', error));
+        }, 24 * 60 * 60 * 1000);
+    }
+
+    async ensureOpen() {
+        if (dbReady) {
+            return;
+        }
+
+        await openDatabaseWithRecovery();
+        dbReady = true;
     }
 
     /**
@@ -130,7 +163,9 @@ class StatusDb {
     async init() {
         try {
             console.log('Initializing status database...');
-            
+
+            await this.ensureOpen();
+
             // Initial purge of old records
             await this.purgeOldRecords();
             
@@ -275,6 +310,10 @@ class StatusDb {
      * Purge records older than the retention period
      */
     async purgeOldRecords() {
+        if (!dbReady) {
+            return;
+        }
+
         const cutoffDate = new Date();
         cutoffDate.setDate(cutoffDate.getDate() - config.dataRetentionDays);
         

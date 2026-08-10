@@ -33,8 +33,7 @@ process.on('unhandledRejection', (reason, promise) => {
     logError('unhandledRejection', reason);
   }
   
-  // Graceful shutdown
-  gracefulShutdown('unhandledRejection', 1);
+  // Keep the process alive; a failed relay check must not take down the site
 });
 
 // Graceful shutdown handler
@@ -211,24 +210,7 @@ const logError = (type, error) => {
 const startServer = async () => {
   try {
     console.log('Starting Nostria Relay Monitor Server...');
-    
-    // Initialize the monitoring service with retry logic
-    let retries = 3;
-    while (retries > 0) {
-      try {
-        await monitoringService.init();
-        console.log('Monitoring service initialized successfully');
-        break;
-      } catch (error) {
-        retries--;
-        console.error(`Failed to initialize monitoring service (${3 - retries}/3):`, error.message);
-        if (retries === 0) {
-          throw new Error('Failed to initialize monitoring service after 3 attempts');
-        }
-        await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds before retry
-      }
-    }
-    
+
     // Start server
     const port = config.port || 3000;
     server = app.listen(port, '0.0.0.0', () => {
@@ -250,11 +232,33 @@ const startServer = async () => {
     // Keep alive settings
     server.keepAliveTimeout = 61000;
     server.headersTimeout = 62000;
-    
+
+    // Initialize monitoring in the background so container/warm-up probes are not blocked
+    initMonitoring();
   } catch (error) {
     console.error('Failed to start server:', error);
     logError('startup', error);
     gracefulShutdown('startup-error', 1);
+  }
+};
+
+// Initialize the monitoring service with retry logic; failures must not kill the process
+const initMonitoring = async () => {
+  let retries = 3;
+  while (retries > 0) {
+    try {
+      await monitoringService.init();
+      console.log('Monitoring service initialized successfully');
+      return;
+    } catch (error) {
+      retries--;
+      console.error(`Failed to initialize monitoring service (${3 - retries}/3):`, error.message);
+      if (retries === 0) {
+        logError('monitoring-init', error);
+        return;
+      }
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
   }
 };
 
