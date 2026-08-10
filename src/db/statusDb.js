@@ -4,38 +4,46 @@ import fs from 'fs';
 import os from 'os';
 import config from '../config.js';
 
+// New file name: the previous status.jsonl may be locked/corrupted on mounted storage.
+const dbFileName = process.env.DB_FILE || 'relay-status.jsonl';
+
+// proper-lockfile does not work reliably on SMB mounts (Azure /home), so keep the
+// lock on the container-local filesystem while the data stays on persistent storage.
+const lockDir = process.env.DB_LOCK_DIR || path.join(os.tmpdir(), 'nostria-relay-monitor-locks');
+const lockFilePath = path.join(lockDir, `${dbFileName}.lock`);
+
+const dbOptions = {
+    lockfile: {
+        directory: lockDir,
+        staleMs: 10000,
+        updateMs: 5000,
+        retries: 3,
+        retryMinTimeoutMs: 500
+    }
+};
+
 // Candidate directories in priority order; mounted storage (e.g. Azure /home) can be
 // unwritable for the container user, so fall back instead of crashing at startup.
-const dbDirCandidates = [
+const dbDirCandidates = [...new Set([
     config.dbPath || './data',
     './data',
     path.join(os.tmpdir(), 'nostria-relay-monitor')
-];
+])];
 
-const resolveDbDir = () => {
-    for (const candidate of dbDirCandidates) {
-        try {
-            fs.mkdirSync(candidate, { recursive: true });
-            fs.accessSync(candidate, fs.constants.W_OK);
-            return candidate;
-        } catch (error) {
-            console.warn(`Database directory not usable (${candidate}): ${error.message}`);
-        }
+const isDirUsable = (candidate) => {
+    try {
+        fs.mkdirSync(candidate, { recursive: true });
+        fs.accessSync(candidate, fs.constants.W_OK);
+        return true;
+    } catch (error) {
+        console.warn(`Database directory not usable (${candidate}): ${error.message}`);
+        return false;
     }
-
-    throw new Error('No writable database directory available');
 };
 
-const dbDir = resolveDbDir();
-if (dbDir !== dbDirCandidates[0]) {
-    console.warn(`Using fallback database directory: ${dbDir}`);
-}
-
-const dbFilePath = path.join(dbDir, 'status.jsonl');
-const lockFilePath = `${dbFilePath}.lock`;
-
-// Create database instance
-const db = new JsonlDB(dbFilePath);
+let db = null;
+let dbFilePath = null;
+let dbReady = false;
 
 const isLockError = (error) =>
     typeof error?.message === 'string' && error.message.includes('Failed to lock DB file');
@@ -48,16 +56,16 @@ const extractInvalidLineNo = (error) => {
     return match ? Number(match[1]) : null;
 };
 
-const sanitizeJsonlFile = () => {
-    if (!fs.existsSync(dbFilePath)) {
+const sanitizeJsonlFile = (filePath) => {
+    if (!fs.existsSync(filePath)) {
         return;
     }
 
     const backupSuffix = new Date().toISOString().replace(/[:.]/g, '-');
-    const backupPath = `${dbFilePath}.corrupt-${backupSuffix}.bak`;
-    fs.copyFileSync(dbFilePath, backupPath);
+    const backupPath = `${filePath}.corrupt-${backupSuffix}.bak`;
+    fs.copyFileSync(filePath, backupPath);
 
-    const content = fs.readFileSync(dbFilePath, 'utf8');
+    const content = fs.readFileSync(filePath, 'utf8');
     const lines = content.split(/\r?\n/);
     const validLines = [];
     let skippedLines = 0;
@@ -76,63 +84,78 @@ const sanitizeJsonlFile = () => {
     }
 
     const rebuilt = validLines.length > 0 ? `${validLines.join('\n')}\n` : '';
-    fs.writeFileSync(dbFilePath, rebuilt, 'utf8');
+    fs.writeFileSync(filePath, rebuilt, 'utf8');
 
     console.warn(`Sanitized corrupted database file. Removed ${skippedLines} invalid line(s). Backup: ${backupPath}`);
 };
 
-const openDatabaseWithRecovery = async () => {
+const removeStaleLock = () => {
+    if (!fs.existsSync(lockFilePath)) {
+        return false;
+    }
+
+    console.warn(`Removing stale DB lock: ${lockFilePath}`);
+    fs.rmSync(lockFilePath, { recursive: true, force: true });
+    return true;
+};
+
+const openDatabaseAt = async (dir) => {
+    const filePath = path.join(dir, dbFileName);
+    const instance = new JsonlDB(filePath, dbOptions);
+
     try {
-        await db.open();
-        return;
+        await instance.open();
     } catch (error) {
         if (isInvalidDataError(error)) {
             const invalidLineNo = extractInvalidLineNo(error);
             console.warn(`Detected invalid JSONL data${invalidLineNo ? ` at line ${invalidLineNo}` : ''}. Attempting file repair...`);
-            sanitizeJsonlFile();
-            await db.open();
-            return;
-        }
-
-        if (!isLockError(error)) {
+            sanitizeJsonlFile(filePath);
+            await instance.open();
+        } else if (isLockError(error) && removeStaleLock()) {
+            await instance.open();
+        } else {
             throw error;
         }
-
-        if (!fs.existsSync(lockFilePath)) {
-            throw error;
-        }
-
-        const maxLockRetries = 3;
-        for (let attempt = 1; attempt <= maxLockRetries; attempt++) {
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            try {
-                await db.open();
-                return;
-            } catch (retryError) {
-                const retryLockError = isLockError(retryError);
-                if (!retryLockError) {
-                    throw retryError;
-                }
-                if (attempt === maxLockRetries && process.env.ALLOW_DB_FORCE_UNLOCK === 'false') {
-                    throw new Error(`Database appears to be in use (set ALLOW_DB_FORCE_UNLOCK=true to recover): ${lockFilePath}`);
-                }
-            }
-        }
-
-        console.warn(`Removing lock after retries: ${lockFilePath}`);
-        fs.rmSync(lockFilePath, { recursive: true, force: true });
-
-        await db.open();
     }
+
+    return { instance, filePath };
 };
 
-let dbReady = false;
+const openDatabaseWithRecovery = async () => {
+    fs.mkdirSync(lockDir, { recursive: true });
+
+    const errors = [];
+
+    for (const candidate of dbDirCandidates) {
+        if (!isDirUsable(candidate)) {
+            continue;
+        }
+
+        try {
+            const opened = await openDatabaseAt(candidate);
+            db = opened.instance;
+            dbFilePath = opened.filePath;
+            dbReady = true;
+
+            if (candidate !== dbDirCandidates[0]) {
+                console.warn(`Using fallback database directory: ${candidate}`);
+            }
+            console.log(`Status database opened: ${dbFilePath}`);
+            return;
+        } catch (error) {
+            errors.push(`${candidate}: ${error.message}`);
+            console.warn(`Failed to open database in ${candidate}: ${error.message}`);
+        }
+    }
+
+    throw new Error(`Could not open database in any location -> ${errors.join(' | ')}`);
+};
+
 try {
     await openDatabaseWithRecovery();
-    dbReady = true;
 } catch (error) {
     // Keep the process alive so the web server can still start and report health.
-    console.error(`Failed to open status database (${dbFilePath}):`, error);
+    console.error('Failed to open status database:', error.message);
 }
 
 /**
@@ -140,12 +163,14 @@ try {
  */
 class StatusDb {
     constructor() {
-        this.db = db;
-        
         // Auto-purge old records every day
         setInterval(() => {
             this.purgeOldRecords().catch(error => console.error('Scheduled purge failed:', error));
         }, 24 * 60 * 60 * 1000);
+    }
+
+    get db() {
+        return db;
     }
 
     async ensureOpen() {
@@ -154,7 +179,6 @@ class StatusDb {
         }
 
         await openDatabaseWithRecovery();
-        dbReady = true;
     }
 
     /**
@@ -185,6 +209,10 @@ class StatusDb {
         try {
             if (!record || !record.service) {
                 throw new Error('Invalid record: missing service name');
+            }
+
+            if (!dbReady) {
+                throw new Error('Database is not available');
             }
 
             const timestamp = record.timestamp || new Date().toISOString();
@@ -224,6 +252,10 @@ class StatusDb {
      * @returns {Array} - Array of status records
      */
     async getServiceRecords(serviceName, days = 7) {
+        if (!dbReady) {
+            return [];
+        }
+
         const cutoffDate = new Date();
         cutoffDate.setDate(cutoffDate.getDate() - days);
         
@@ -265,6 +297,11 @@ class StatusDb {
      */
     async getAllRecords(days = 7) {
         const services = {};
+
+        if (!dbReady) {
+            return services;
+        }
+
         const cutoffDate = new Date();
         cutoffDate.setDate(cutoffDate.getDate() - days);
         
@@ -293,7 +330,11 @@ class StatusDb {
      */
     async getLatestStatus() {
         const services = {};
-        
+
+        if (!dbReady) {
+            return services;
+        }
+
         for (const [_, record] of this.db.entries()) {
             const serviceName = record.service;
             
