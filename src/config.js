@@ -10,6 +10,7 @@ dotenv.config();
 const relayHosts = [
   'ribo.nostria.app',
   'indexer.openresist.com',
+  'discovery.eu.nostria.app',
   'relay.damus.io',
   'relay.primal.net',
   'nos.lol',
